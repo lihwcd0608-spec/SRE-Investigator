@@ -1,0 +1,22 @@
+{
+  "project": {
+    "name": "demo-app",
+    "slug": "demo-app",
+    "topology": "admin_app_dual"
+  },
+  "repositories": [
+    {
+      "name": "demo-admin-broad",
+      "localPath": "/Users/yourname/IdeaProjects/workspaces/demo-admin-broad",
+      "defaultBranch": "dev",
+      "role": "admin"
+    },
+    {
+      "name": "demo-app-broad",
+      "localPath": "/Users/yourname/IdeaProjects/workspaces/demo-app-broad",
+      "defaultBranch": "dev",
+      "role": "app"
+    }
+  ],
+  "environments": ["local", "test", "gray", "prod"]
+}

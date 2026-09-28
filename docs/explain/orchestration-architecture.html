@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRE Investigator 编排架构</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 1280px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot {
+      width: 12px; height: 12px; background: #22d3ee; border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+    svg { width: 100%; min-width: 980px; display: block; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+    .toolbar {
+      display: flex; gap: 0.5rem; margin-left: auto; flex-shrink: 0; align-items: center;
+    }
+    .toolbar-toggle {
+      background: transparent; border: none; color: #475569; cursor: pointer;
+      font-size: 1.25rem; line-height: 1; padding: 0.25rem 0.5rem; border-radius: 0.375rem;
+    }
+    .toolbar-toggle:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.5); }
+    .toolbar-actions { display: none; gap: 0.5rem; }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button {
+      background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; color: #94a3b8;
+      padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-family: inherit;
+      font-size: 0.75rem; cursor: pointer; white-space: nowrap;
+    }
+    .toolbar-actions button:hover { background: rgba(51, 65, 85, 0.8); color: white; border-color: #475569; }
+    @media print {
+      body { background: #020617; padding: 1rem; }
+      .toolbar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>SRE Investigator 编排架构</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions">
+            <button onclick="copyAsImage(this)">Copy</button>
+            <button onclick="downloadPNG(this)">PNG</button>
+            <button onclick="downloadPDF(this)">PDF</button>
+          </div>
+          <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">会话先改写问题，策略再分流；真正排查发生在一轮 ChatClient 工具循环，Graph 是线性装载器</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1120 700">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+          </marker>
+          <marker id="arrow-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
+          </marker>
+          <marker id="arrow-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" />
+          </marker>
+          <marker id="arrow-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+          </marker>
+          <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb923c" />
+          </marker>
+          <marker id="arrow-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- arrows first so boxes sit on top -->
+        <line x1="124" y1="193" x2="148" y2="193" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="311" y1="98" x2="356" y2="98" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+        <line x1="520" y1="98" x2="536" y2="98" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-emerald)"/>
+        <line x1="604" y1="124" x2="522" y2="148" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrow-emerald)"/>
+        <path d="M 672 168 L 700 168 L 700 74 L 720 74" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+        <text x="688" y="58" fill="#22d3ee" font-size="8">ASK</text>
+        <path d="M 672 200 L 720 200 L 720 181 L 740 181" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <text x="686" y="216" fill="#fbbf24" font-size="8">INVESTIGATE</text>
+        <line x1="872" y1="181" x2="896" y2="181" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <line x1="806" y1="206" x2="806" y2="230" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <path d="M 872 264 L 888 264 L 888 224 L 896 224" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <line x1="986" y1="224" x2="986" y2="248" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <path d="M 800 100 L 800 118 L 472 118 L 472 280" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+        <path d="M 896 190 L 620 190 L 620 280" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+        <line x1="472" y1="336" x2="472" y2="360" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <line x1="500" y1="360" x2="500" y2="336" stroke="#fb923c" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-orange)"/>
+        <text x="512" y="352" fill="#fb923c" font-size="7">tool loop</text>
+        <path d="M 372 308 L 324 308 L 324 360" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow-violet)"/>
+        <line x1="572" y1="410" x2="720" y2="496" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-rose)"/>
+        <text x="628" y="448" fill="#94a3b8" font-size="7">SLS / MSE / K8s 已接线</text>
+        <line x1="806" y1="156" x2="806" y2="148" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="4,3"/>
+
+        <!-- Users -->
+        <rect x="24" y="168" width="100" height="50" rx="6" fill="#0f172a"/>
+        <rect x="24" y="168" width="100" height="50" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="74" y="188" fill="white" font-size="11" font-weight="600" text-anchor="middle">用户</text>
+        <text x="74" y="204" fill="#94a3b8" font-size="9" text-anchor="middle">Browser</text>
+
+        <!-- Console -->
+        <rect x="148" y="48" width="176" height="200" rx="12" fill="rgba(8, 51, 68, 0.12)" stroke="#22d3ee" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="160" y="66" fill="#22d3ee" font-size="10" font-weight="600">Console · Frontend</text>
+        <rect x="161" y="76" width="150" height="52" rx="6" fill="#0f172a"/>
+        <rect x="161" y="76" width="150" height="52" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="236" y="96" fill="white" font-size="11" font-weight="600" text-anchor="middle">InvestigatePage</text>
+        <text x="236" y="112" fill="#94a3b8" font-size="8" text-anchor="middle">ASK / INVESTIGATE</text>
+        <rect x="161" y="160" width="150" height="52" rx="6" fill="#0f172a"/>
+        <rect x="161" y="160" width="150" height="52" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="236" y="180" fill="white" font-size="11" font-weight="600" text-anchor="middle">liveSession</text>
+        <text x="236" y="196" fill="#94a3b8" font-size="8" text-anchor="middle">SSE + 10s 恢复超时</text>
+        <rect x="196" y="132" width="80" height="18" rx="4" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1"/>
+        <text x="236" y="145" fill="#fb923c" font-size="7" text-anchor="middle">POST /stream</text>
+
+        <!-- Boot -->
+        <rect x="356" y="48" width="332" height="200" rx="12" fill="rgba(6, 78, 59, 0.08)" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="368" y="66" fill="#34d399" font-size="10" font-weight="600">Boot · Control Plane</text>
+        <rect x="372" y="76" width="148" height="52" rx="6" fill="#0f172a"/>
+        <rect x="372" y="76" width="148" height="52" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="446" y="96" fill="white" font-size="11" font-weight="600" text-anchor="middle">StreamController</text>
+        <text x="446" y="112" fill="#94a3b8" font-size="8" text-anchor="middle">鉴权 + SSE thought</text>
+        <rect x="536" y="76" width="136" height="52" rx="6" fill="#0f172a"/>
+        <rect x="536" y="76" width="136" height="52" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="604" y="96" fill="white" font-size="11" font-weight="600" text-anchor="middle">RunService</text>
+        <text x="604" y="112" fill="#94a3b8" font-size="8" text-anchor="middle">UsageContext</text>
+        <rect x="372" y="148" width="300" height="80" rx="6" fill="#0f172a"/>
+        <rect x="372" y="148" width="300" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="522" y="170" fill="white" font-size="11" font-weight="600" text-anchor="middle">ConversationSessionService</text>
+        <text x="522" y="188" fill="#94a3b8" font-size="8" text-anchor="middle">ContinuationPrompt + TurnHistoryPrompt</text>
+        <text x="522" y="204" fill="#94a3b8" font-size="8" text-anchor="middle">附件 · 10 轮上限 · memory 未写</text>
+
+        <!-- ASK -->
+        <rect x="720" y="48" width="160" height="52" rx="6" fill="#0f172a"/>
+        <rect x="720" y="48" width="160" height="52" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="800" y="68" fill="white" font-size="11" font-weight="600" text-anchor="middle">ASK Agent</text>
+        <text x="800" y="84" fill="#94a3b8" font-size="8" text-anchor="middle">仅 code_read / search</text>
+
+        <!-- Graph -->
+        <rect x="720" y="128" width="376" height="280" rx="12" fill="rgba(251, 191, 36, 0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="732" y="146" fill="#fbbf24" font-size="10" font-weight="600">Graph · 线性装载（非多步推理）</text>
+        <rect x="740" y="156" width="132" height="50" rx="6" fill="#0f172a"/>
+        <rect x="740" y="156" width="132" height="50" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="806" y="176" fill="white" font-size="11" font-weight="600" text-anchor="middle">route</text>
+        <text x="806" y="192" fill="#94a3b8" font-size="8" text-anchor="middle">用户选 / 模型分类</text>
+        <rect x="740" y="230" width="132" height="68" rx="6" fill="#0f172a"/>
+        <rect x="740" y="230" width="132" height="68" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="806" y="250" fill="white" font-size="11" font-weight="600" text-anchor="middle">load_context</text>
+        <text x="806" y="266" fill="#94a3b8" font-size="8" text-anchor="middle">Binding / Skill / Rule</text>
+        <text x="806" y="280" fill="#94a3b8" font-size="8" text-anchor="middle">当前环境启用项</text>
+        <rect x="896" y="156" width="180" height="68" rx="6" fill="#0f172a"/>
+        <rect x="896" y="156" width="180" height="68" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="986" y="176" fill="white" font-size="11" font-weight="600" text-anchor="middle">investigate</text>
+        <text x="986" y="192" fill="#94a3b8" font-size="8" text-anchor="middle">拼 user：Brief+目录</text>
+        <text x="986" y="206" fill="#94a3b8" font-size="8" text-anchor="middle">Skill+Rule+@预读</text>
+        <rect x="896" y="248" width="180" height="50" rx="6" fill="#0f172a"/>
+        <rect x="896" y="248" width="180" height="50" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="986" y="268" fill="white" font-size="11" font-weight="600" text-anchor="middle">synthesize</text>
+        <text x="986" y="284" fill="#94a3b8" font-size="8" text-anchor="middle">成功则透传，几乎不跑</text>
+        <text x="806" y="388" fill="#94a3b8" font-size="8" text-anchor="middle">System = 只读政策 · User = 一层堆叠</text>
+
+        <!-- LLM -->
+        <rect x="372" y="280" width="200" height="56" rx="6" fill="#0f172a"/>
+        <rect x="372" y="280" width="200" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="472" y="302" fill="white" font-size="11" font-weight="600" text-anchor="middle">ChatModel.call</text>
+        <text x="472" y="318" fill="#94a3b8" font-size="8" text-anchor="middle">DashScope / OpenAI / …</text>
+
+        <!-- Tools -->
+        <rect x="372" y="360" width="200" height="100" rx="6" fill="#0f172a"/>
+        <rect x="372" y="360" width="200" height="100" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="472" y="380" fill="white" font-size="11" font-weight="600" text-anchor="middle">只读工具</text>
+        <text x="472" y="398" fill="#94a3b8" font-size="8" text-anchor="middle">code_read / code_search</text>
+        <text x="472" y="412" fill="#94a3b8" font-size="8" text-anchor="middle">mysql_query_readonly</text>
+        <text x="472" y="426" fill="#94a3b8" font-size="8" text-anchor="middle">redis_get / redis_inspect</text>
+        <text x="472" y="446" fill="#34d399" font-size="7" text-anchor="middle">外部 MCP 默认关</text>
+
+        <!-- Stores -->
+        <rect x="148" y="360" width="176" height="100" rx="6" fill="#0f172a"/>
+        <rect x="148" y="360" width="176" height="100" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="236" y="382" fill="white" font-size="11" font-weight="600" text-anchor="middle">控制面库</text>
+        <text x="236" y="400" fill="#94a3b8" font-size="8" text-anchor="middle">run / conversation</text>
+        <text x="236" y="414" fill="#94a3b8" font-size="8" text-anchor="middle">usage_event / catalog</text>
+        <text x="236" y="434" fill="#a78bfa" font-size="7" text-anchor="middle">NEEDS_INPUT · 用量异步</text>
+
+        <!-- Gaps -->
+        <rect x="720" y="432" width="376" height="128" rx="8" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="732" y="450" fill="#fb7185" font-size="10" font-weight="600">P0 / P1 缺口</text>
+        <text x="740" y="472" fill="#94a3b8" font-size="9">已做  方向可选 + investigator.routes 配置表</text>
+        <text x="740" y="490" fill="#94a3b8" font-size="9">已做  SLS / MSE / K8s 只读工具；ES 仍未接线</text>
+        <text x="740" y="508" fill="#94a3b8" font-size="9">已做  memorySummary + 最近 2 轮 + 可选 Redis/Qdrant</text>
+        <text x="740" y="526" fill="#e2e8f0" font-size="9">P1  Rule 不按 route 过滤；提示词一层堆叠</text>
+        <text x="740" y="544" fill="#94a3b8" font-size="8">P2  CODE 禁用 · Graph 无分支 · schema/scan 未暴露</text>
+
+        <!-- Legend outside all boundaries (lowest box ends y=560) -->
+        <text x="24" y="590" fill="white" font-size="10" font-weight="600">图例</text>
+        <rect x="24" y="602" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="46" y="611" fill="#94a3b8" font-size="8">Frontend / ASK</text>
+        <rect x="160" y="602" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="182" y="611" fill="#94a3b8" font-size="8">Backend / 工具</text>
+        <rect x="300" y="602" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="322" y="611" fill="#94a3b8" font-size="8">Graph 节点</text>
+        <rect x="430" y="602" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="452" y="611" fill="#94a3b8" font-size="8">存储</text>
+        <rect x="530" y="602" width="16" height="10" rx="2" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="552" y="611" fill="#94a3b8" font-size="8">缺口 / 未接线</text>
+        <rect x="680" y="602" width="16" height="10" rx="2" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1"/>
+        <text x="702" y="611" fill="#94a3b8" font-size="8">工具循环 / 总线</text>
+        <line x1="850" y1="607" x2="874" y2="607" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="880" y="611" fill="#94a3b8" font-size="8">缺失能力</text>
+        <text x="24" y="640" fill="#64748b" font-size="8">实线 = 已接线主路径 · 橙虚线 = 工具回模型 · 玫红虚线 = 缺口</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>已接线</h3>
+        </div>
+        <ul>
+          <li>• ASK / INVESTIGATE + SSE thought</li>
+          <li>• 历史摘要 + 最近 2 轮 / 续排查 / @预读 / 用量异步记</li>
+          <li>• MySQL · Redis · 代码仓（当前环境 Binding）</li>
+          <li>• Skill（配置表方向 + 精确 route）· Rule（全量）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>最紧急</h3>
+        </div>
+        <ul>
+          <li>• 日志 / 链路进不了 Agent，现场只有代码+库+缓存</li>
+          <li>• 政策、Brief、Skill、Rule、预读仍叠在同一层 User</li>
+          <li>• ASK 问订单也查不到库，容易误用</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>建议顺序</h3>
+        </div>
+        <ul>
+          <li>• 1. 接一种只读日志（traceId / userId）</li>
+          <li>• 2. System 放政策+Rule，User 放 Brief+预读</li>
+          <li>• 3. 按业务再开 CODE / Mongo / schema</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">SRE Investigator · 编排现状与缺口 · 2026-08-28 · 详见同目录 orchestration.md</p>
+  </div>
+
+  <script>
+    async function copyAsImage(btn) {
+      const orig = btn.textContent;
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = 'Copied';
+      } catch (e) {
+        btn.textContent = 'Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+    async function downloadPNG(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const link = document.createElement('a');
+        link.download = 'sre-investigator-orchestration.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        btn.textContent = 'Done';
+      } catch (e) {
+        btn.textContent = 'Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+    async function downloadPDF(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('sre-investigator-orchestration.pdf');
+        btn.textContent = 'Done';
+      } catch (e) {
+        btn.textContent = 'Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  </script>
+</body>
+</html>

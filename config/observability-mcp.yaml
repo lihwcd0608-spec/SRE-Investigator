@@ -1,0 +1,10 @@
+# 官方可观测 MCP 白名单。不要打开 sls_text_to_sql / sls_text_to_spl / sls_sop / cms_natural_language_query（STAROps 计费）。
+# 启用方式：SPRING_PROFILES_ACTIVE 增加 obs-mcp，并设置 ALIBABA_CLOUD_ACCESS_KEY_ID / SECRET。
+# 主路径仍是 MCP 页 LOGS Binding + 进程内 sls_query_readonly。
+toolkit:
+  scope: sls
+  enabled_tools:
+    - sls_list_projects
+    - sls_list_logstores
+    - sls_execute_sql
+    - sls_get_context_logs

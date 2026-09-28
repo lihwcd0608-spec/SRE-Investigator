@@ -1,0 +1,213 @@
+# 配置怎么用（先看这一段）
+#
+# 1. 运行环境（默认 local）
+#    SPRING_PROFILES_ACTIVE=local | test | pre | prod
+#    自动带上 mysql + tools。MySQL + Redis 合写在 application-{local|test|pre|prod}.yml
+#
+# 2. 可选能力（按需追加，逗号分隔）
+#    docker   — Compose 容器内主机名（本机 IDEA 不要开）
+#    mcp      — 接入 Node 只读 MCP
+#    memory   — 零依赖演示（不连控制面 MySQL；不要和 local/test 一起开）
+#    dashscope / no-dashscope — 旧开关，模型请改 application-model.yml 或「模型」页
+#
+# 3. 可选本地文件（gitignore，按需自建，不要提交密钥）
+#    application-model.yml / application-secrets.yml / application-tools.yml
+#
+# 例：本机 IDEA → local（默认）
+#     测试机   → test
+#     预发     → pre
+#     容器一键 → local,docker
+#     加 MCP   → local,mcp
+
+spring:
+  application:
+    name: sre-investigator-java
+  config:
+    import:
+      - optional:classpath:application-model.yml
+      - optional:classpath:application-secrets.yml
+  profiles:
+    default: local
+    group:
+      local:
+        - mysql
+        - tools
+      test:
+        - mysql
+        - tools
+      pre:
+        - mysql
+        - tools
+      prod:
+        - mysql
+        - tools
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    retry:
+      max-attempts: 1
+  mvc:
+    async:
+      request-timeout: ${SRE_SSE_TIMEOUT_MS:1800000}
+  session:
+    store-type: redis
+    redis:
+      namespace: investigator:session
+  data:
+    redis:
+      # 控制面 Redis 只配这一处：host/port/账号密码共用，库号分开
+      host: 127.0.0.1
+      port: 6379
+      username: ""
+      password: ""
+      session:
+        database: 2
+      memory:
+        database: 1
+        enabled: ${INVESTIGATOR_MEMORY_REDIS:false}
+        ttl-seconds: 7200
+      repositories:
+        enabled: false
+  autoconfigure:
+    exclude:
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
+      # MongoDB 仅通过 MCP 按需连接，不要启动时连 localhost:27017
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration
+
+server:
+  port: ${SRE_JAVA_PORT:8790}
+  servlet:
+    session:
+      timeout: 24h
+      cookie:
+        http-only: true
+        same-site: lax
+        name: INVESTIGATOR_SESSION
+        max-age: 24h
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.maiya.investigator: INFO
+    org.springframework.ai: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+investigator:
+  aliyun:
+    # ARMS / ALB / CLB / CDN 共用一个 RAM 只读身份；不要使用主账号 AK。
+    access-key-id:
+    access-key-secret:
+  auth:
+    bootstrap-user: ${INVESTIGATOR_BOOTSTRAP_USER:admin}
+    bootstrap-password: ${INVESTIGATOR_BOOTSTRAP_PASSWORD:}
+    feishu:
+      # 登录或群机器人：二选一要用就填 App ID / Secret；都不用可留空
+      app-id: ${FEISHU_APP_ID:}
+      app-secret: ${FEISHU_APP_SECRET:}
+      redirect-uri: ${FEISHU_REDIRECT_URI:http://localhost:8790/api/auth/feishu/callback}
+      success-redirect: ${FEISHU_SUCCESS_REDIRECT:/}
+      # 群机器人必须 true；只用飞书登录保持 false
+      bot-enabled: ${FEISHU_BOT_ENABLED:false}
+      # 群机器人建议填 Verification Token；不填则不校验事件 token
+      verification-token: ${FEISHU_VERIFICATION_TOKEN:}
+      # 不要填，且开放平台不要开事件加密
+      encrypt-key: ${FEISHU_ENCRYPT_KEY:}
+      # 可不改，默认 feishu-bot，须与用户页服务账号同名
+      service-username: ${FEISHU_BOT_SERVICE_USERNAME:feishu-bot}
+  persistence:
+    mode: memory
+  secrets:
+    # 本地写在 application-secrets.yml，不要提交。换了之后以前加密保存的 MCP 凭据解不开。
+    master-key: ${INVESTIGATOR_MASTER_KEY:}
+  memory:
+    recent-turns: 2
+    summary-max-chars: 600
+    ltm-max-chars: 800
+    qdrant:
+      enabled: ${INVESTIGATOR_MEMORY_QDRANT:false}
+      host: ${INVESTIGATOR_QDRANT_HOST:127.0.0.1}
+      port: ${INVESTIGATOR_QDRANT_PORT:6333}
+      collection: investigator_ltm
+      embedding-model: text-embedding-v3
+      embedding-base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      embedding-api-key: ${INVESTIGATOR_EMBEDDING_API_KEY:}
+      vector-size: 1024
+  routes:
+    fallback: http-5xx
+    items:
+      - id: http-5xx
+        label: 接口/可用性
+        description: HTTP 5xx、超时、网关、下游不可用
+        keywords:
+          - 5xx
+          - 超时
+          - 网关
+          - 接口报错
+          - 不可用
+        tool-kinds:
+          - CODE
+          - LOGS
+          - MSE
+          - ARMS
+          - LOAD_BALANCER
+          - MYSQL
+          - K8S
+      - id: order-payment
+        label: 订单/支付
+        description: 订单创建、支付回调、幂等、状态不一致
+        keywords:
+          - 订单
+          - 支付
+          - 回调
+          - 幂等
+          - 退款
+        tool-kinds:
+          - CODE
+          - MYSQL
+          - REDIS
+  agent:
+    max-tool-calls: ${SRE_AGENT_MAX_TOOL_CALLS:16}
+    max-user-turns: ${SRE_AGENT_MAX_USER_TURNS:10}
+    investigate-prompt: |
+      你是只读 SRE 排查 Agent。只使用本轮已列出的工具，不要把预算浪费在扫目录或猜表名上：
+      1. 有代码工具时，先顺着 @ 入口和预读源码找到真实表名、字段、缓存 key。同一符号不要再 code_search。
+      2. 表名、字段、缓存 key 只能来自刚读到的代码。禁止按业务名猜测后查库。
+      3. 确认后再查本轮可用的数据工具。profile 必须用提示里的 MCP 名，不要加前缀。SHOW/DESCRIBE 不要加 LIMIT。
+      4. 不要为了「有这类工具」就先 list 一遍。预算用尽也必须先交结论，不要空转。
+      5. 不得编造工具结果，不得建议或执行写库、删缓存、重启、改配置。
+      6. 输出固定四段：已确认的证据、假设、已排除项、下一步。证据必须能对应到工具结果或预读代码。
+  repos:
+    timeout-seconds: 180
+    default-name: demo-app-abroad
+  tools:
+    mysql-uri: ""

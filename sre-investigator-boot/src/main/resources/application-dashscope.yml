@@ -1,0 +1,5 @@
+# 兼容旧 Profile：test,dashscope 或 mysql,dashscope。新配置请写 application-model.yml 或用页面「模型」。
+investigator:
+  model:
+    enabled: true
+    provider: dashscope

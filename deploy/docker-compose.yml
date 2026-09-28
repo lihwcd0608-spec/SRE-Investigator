@@ -1,0 +1,82 @@
+# 开发验收用，含易记本地口令，不能当生产清单。
+#
+# 只要库（本机 IDEA / ./scripts/dev.sh start）：
+#   docker compose -f deploy/docker-compose.yml up -d mysql redis
+#
+# 一键起控制面（页面 8790，需 Docker 能打镜像）：
+#   ./scripts/dev.sh docker
+#   或：docker compose -f deploy/docker-compose.yml --project-directory . --profile app up -d --build mysql redis app
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: sre_investigator
+      MYSQL_USER: sre_investigator
+      MYSQL_PASSWORD: sre_investigator
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "33069:3306"
+    volumes:
+      - investigator-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--protected-mode", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - investigator-qdrant:/qdrant/storage
+  app:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: sre-investigator:local
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8790:8790"
+    environment:
+      SPRING_PROFILES_ACTIVE: local,docker
+      INVESTIGATOR_MASTER_KEY: ${INVESTIGATOR_MASTER_KEY:-}
+      INVESTIGATOR_BOOTSTRAP_USER: ${INVESTIGATOR_BOOTSTRAP_USER:-admin}
+      INVESTIGATOR_BOOTSTRAP_PASSWORD: ${INVESTIGATOR_BOOTSTRAP_PASSWORD:-}
+      INVESTIGATOR_MODEL_DASHSCOPE_API_KEY: ${INVESTIGATOR_MODEL_DASHSCOPE_API_KEY:-}
+      INVESTIGATOR_MODEL_OPENAI_API_KEY: ${INVESTIGATOR_MODEL_OPENAI_API_KEY:-}
+      INVESTIGATOR_MODEL_OPENAI_BASE_URL: ${INVESTIGATOR_MODEL_OPENAI_BASE_URL:-}
+      INVESTIGATOR_MODEL_ANTHROPIC_API_KEY: ${INVESTIGATOR_MODEL_ANTHROPIC_API_KEY:-}
+      FEISHU_APP_ID: ${FEISHU_APP_ID:-}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET:-}
+      FEISHU_BOT_ENABLED: ${FEISHU_BOT_ENABLED:-false}
+      FEISHU_VERIFICATION_TOKEN: ${FEISHU_VERIFICATION_TOKEN:-}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m -Duser.timezone=Asia/Shanghai}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8790/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 50s
+    restart: unless-stopped
+volumes:
+  investigator-mysql:
+  investigator-qdrant:

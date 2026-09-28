@@ -1,0 +1,29 @@
+.git
+.idea
+.cursor
+**/.DS_Store
+**/target
+**/node_modules
+**/.vite
+**/dist
+*.log
+*.iml
+
+# 本机密钥，不要打进镜像
+sre-investigator-boot/src/main/resources/application-secrets.yml
+sre-investigator-boot/src/main/resources/application-mysql.yml
+sre-investigator-boot/src/main/resources/application-model.yml
+sre-investigator-boot/src/main/resources/application-tools.yml
+.env
+.env.*
+!.env.example
+scripts/local.env
+
+# 镜像不编译前端 / Node MCP
+apps
+packages
+docs
+.harness
+AGENTS.md
+CLAUDE.md
+MEMORY.md

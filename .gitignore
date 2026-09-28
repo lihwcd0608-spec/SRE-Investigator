@@ -1,0 +1,44 @@
+# 本地密钥与环境
+scripts/local.env
+sre-investigator-boot/src/main/resources/application-model.yml
+sre-investigator-boot/src/main/resources/application-mysql.yml
+sre-investigator-boot/src/main/resources/application-tools.yml
+sre-investigator-boot/src/main/resources/application-secrets.yml
+.env
+.env.*
+!.env.example
+# 本机导出的控制面配置（含加密 MCP/模型凭据、密码哈希）
+docs/sql/control_plane_config_migrate.sql
+
+# 构建产物
+**/target/
+**/dist/
+**/.vite/
+*.class
+*.jar
+*.war
+hs_err_pid*
+
+# 依赖
+node_modules/
+.pnpm-store/
+
+# IDE / 系统
+.idea/
+*.iml
+.DS_Store
+.cursor/
+
+######################################################################
+# Workspace harness (workspaces) — local only, never commit
+.harness/
+AGENTS.md
+CLAUDE.md
+MEMORY.md
+.agents/
+/memory/
+
+# 日志与临时
+*.log
+*.tmp
+*.swp

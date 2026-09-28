@@ -1,0 +1,49 @@
+spring:
+  ai:
+    mcp:
+      client:
+        enabled: true
+        type: SYNC
+        toolcallback:
+          enabled: true
+        stdio:
+          connections:
+            sre-investigator-readonly:
+              command: ${SRE_MCP_NODE_COMMAND:node}
+              args:
+                - ${SRE_MCP_SERVER_PATH:../packages/mcp-templates/dist/server.js}
+              env:
+                SRE_DEFAULT_PROFILE: ${investigator.tools.default-profile:test}
+                SRE_MYSQL_URI: ${investigator.tools.mysql-uri:}
+                SRE_REDIS_URL: ${investigator.tools.redis-profiles.test:}
+                SRE_CODE_WORKSPACES_JSON: ${SRE_CODE_WORKSPACES_JSON:{}}
+
+investigator:
+  agent:
+    enable-external-mcp: true
+
+---
+# 可选：SPRING_PROFILES_ACTIVE 增加 obs-mcp。AK 走进程环境变量，不进 Binding。
+# 白名单见 config/observability-mcp.yaml；sls_text_to_sql / sls_sop 会计费，默认关闭。
+spring:
+  config:
+    activate:
+      on-profile: obs-mcp
+  ai:
+    mcp:
+      client:
+        stdio:
+          connections:
+            alibaba-cloud-observability:
+              command: ${SRE_OBS_MCP_COMMAND:uvx}
+              args:
+                - --from
+                - alibabacloud-observability-mcp-server
+                - observability-mcp
+                - start
+                - --stdio
+              env:
+                ALIBABA_CLOUD_ACCESS_KEY_ID: ${ALIBABA_CLOUD_ACCESS_KEY_ID:}
+                ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${ALIBABA_CLOUD_ACCESS_KEY_SECRET:}
+                ALIBABA_CLOUD_REGION_ID: ${ALIBABA_CLOUD_REGION_ID:cn-hangzhou}
+                OBSERVABILITY_MCP_CONFIG: ${SRE_OBS_MCP_CONFIG:${user.dir}/config/observability-mcp.yaml}

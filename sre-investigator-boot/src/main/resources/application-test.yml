@@ -1,0 +1,33 @@
+# 测试环境控制面。激活：SPRING_PROFILES_ACTIVE=test
+spring:
+  # --- MySQL（控制面）---
+  datasource:
+    url: jdbc:mysql://rm-2ev50kucd61m27oke.mysql.rds-aliyun-america.rds.aliyuncs.com:3306/sre_investigator?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: ykrtxPqJveG5qtwHT
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  # --- Redis（一套连接；Session / 记忆只分库号）---
+  data:
+    redis:
+      host: nlb-cpk6lm41pgzbpt3uw9.us-west-1.nlb.aliyuncsslbintl.com
+      port: 6375
+      username: ""
+      password: Maiya2024
+      session:
+        database: 2
+      memory:
+        database: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+investigator:
+  persistence:
+    mode: mysql

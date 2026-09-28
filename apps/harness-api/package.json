@@ -1,0 +1,27 @@
+{
+  "name": "@sre-investigator/harness-api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@sre-investigator/domain": "workspace:*",
+    "@sre-investigator/runtime-core": "workspace:*",
+    "@sre-investigator/runtime-cursor": "workspace:*",
+    "@sre-investigator/runtime-selfhosted": "workspace:*",
+    "drizzle-orm": "^0.40.0",
+    "hono": "^4.7.4",
+    "pg": "^8.14.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3"
+  }
+}

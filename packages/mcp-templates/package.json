@@ -1,0 +1,23 @@
+{
+  "name": "@sre-investigator/mcp-templates",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm build && node --test dist/*.test.js",
+    "mcp:stdio": "node dist/server.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.17.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ioredis": "^5.5.0",
+    "mysql2": "^3.12.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9"
+  }
+}

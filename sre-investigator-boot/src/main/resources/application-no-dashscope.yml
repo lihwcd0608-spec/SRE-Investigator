@@ -1,0 +1,4 @@
+# 兼容旧 Profile：只要控制面、不调模型。
+investigator:
+  model:
+    enabled: false

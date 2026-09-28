@@ -1,0 +1,25 @@
+CREATE TABLE investigator_catalog_asset (
+    id BINARY(16) NOT NULL,
+    project_id BINARY(16) NOT NULL,
+    kind VARCHAR(20) NOT NULL,
+    source VARCHAR(20) NOT NULL,
+    slug VARCHAR(80) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    route VARCHAR(80) NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    origin VARCHAR(20) NOT NULL,
+    catalog_id VARCHAR(80) NULL,
+    package_name VARCHAR(200) NULL,
+    source_url VARCHAR(1024) NULL,
+    git_ref VARCHAR(120) NULL,
+    command_line VARCHAR(200) NULL,
+    args VARCHAR(512) NULL,
+    content LONGTEXT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_investigator_catalog_asset (project_id, kind, slug),
+    KEY idx_investigator_catalog_asset_project (project_id, kind, updated_at),
+    CONSTRAINT fk_investigator_catalog_asset_project
+        FOREIGN KEY (project_id) REFERENCES investigator_project (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
